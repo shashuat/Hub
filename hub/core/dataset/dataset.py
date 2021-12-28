@@ -884,7 +884,13 @@ class Dataset:
         from hub.core.query import DatasetQuery
 
         if isinstance(function, str):
-            return query_inplace(self, function, progressbar=True)
+            return query_inplace(
+                self, 
+                function,
+                num_workers=num_workers,
+                scheduler=scheduler,
+                progressbar=progressbar,
+            )
         else:
             return filter_dataset(
                 self,

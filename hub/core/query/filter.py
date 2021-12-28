@@ -90,9 +90,38 @@ def filter_inplace(
     return index_map
 
 
-def query_inplace(dataset: hub.Dataset, query: str, progressbar: bool):
-
-    ds_query = DatasetQuery(dataset, query)
-    index_map = ds_query.execute()
+def query_inplace(
+    dataset: hub.Dataset, 
+    query: str, 
+    progressbar: bool, 
+    num_workers: int,
+    scheduler: str
+):
+    def subquery(dataset_query):
+        dataset, query = dataset_query
+        ds_query = DatasetQuery(dataset, query)
+        return ds_query.execute(progressbar=progressbar)
+    
+    def pg_subquery(pg_callback, dataset_query):
+        dataset, query = dataset_query
+        ds_query = DatasetQuery(dataset, query)
+        return ds_query.execute(pg_callback)
+    
+    if num_workers==0:
+        return subquery((dataset, query))
+    
+    compute = get_compute_provider(scheduler=scheduler, num_workers=num_workers)
+    try:
+        btch = len(dataset)//num_workers
+        subdatasets = [(dataset[idx*btch: (idx+1)*btch], query) for idx in range(0, num_workers)]
+        
+        if progressbar:
+            result = compute.map_with_progressbar(pg_subquery, subdatasets, total_length=len(dataset))  # type: ignore
+        else:
+            result = compute.map(subquery, subdatasets)  # type: ignore
+            
+        index_map = [k for x in result for k in x]  # unfold the result map
+    finally:
+        compute.close()
 
     return index_map

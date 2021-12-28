@@ -21,22 +21,26 @@ class DatasetQuery:
             _get_np(dataset, block) for block in expand(dataset, self._tensors)
         ]
 
-    def execute(self):
+    def execute(self, pg_callback=None, progressbar: bool=False, progressbar_bin: int = 1000):
         idx_map: List[int] = list()
 
-        bar = tqdm(total=len(self._dataset))
-        try:
-            for f in self._np_access:
-                cache = {tensor: f(tensor) for tensor in self._tensors}
-                for local_idx, idx in enumerate(f("index")):
-                    p = {tensor: cache[tensor][local_idx] for tensor in self._tensors}
-                    if eval(self._cquery, p):
-                        idx_map.append(idx)
+        if progressbar: 
+            bar = tqdm(total=len(self._dataset))
+        
+        for f in self._np_access:
+            cache = {tensor: f(tensor) for tensor in self._tensors}
+            for local_idx, idx in enumerate(f("index")):
+                p = {tensor: cache[tensor][local_idx] for tensor in self._tensors}
+                if eval(self._cquery, p):
+                    idx_map.append(idx)
+                    
+                if progressbar:
                     bar.update()
+                    
+                if pg_callback and idx%progressbar_bin==0:
+                    pg_callback(progressbar_bin)
 
-            return idx_map
-        finally:
-            bar.close()
+        return idx_map
 
 
 def _get_np(dataset: Dataset, block: IOBlock):
